@@ -13,3 +13,8 @@ npm install
 ```sh
 npm run dev
 ```
+
+### Start JSON Server
+```sh
+json-server -w data/db.json
+```
