@@ -4,10 +4,14 @@ import { defineStore } from 'pinia';
 // getters as the computed properties of the store,
 // and actions as the methods.
 
+const API_BASE_URL = 'http://localhost:3000/tasks'
+
+
 export const useTaskStore = defineStore('taskStore', {
     state: () => ({
         tasks: [],
         isLoading: false,
+        error: null
     }),
     getters: {
         favs() {
@@ -20,58 +24,79 @@ export const useTaskStore = defineStore('taskStore', {
         },
         totalCount: (state) => {
             return state.tasks.length
-        }
+        },
+        sortedTasks: (state) =>
+            [...state.tasks].sort((a, b) => a.title.localeCompare(b.title))
+
     },
     actions: {
         async getTasks() {
             this.isLoading = true
+            this.isError = null
 
-            const res = await fetch('http://localhost:3000/tasks');
-            const data = await res.json();
+            try {
+                const response = await fetch(API_BASE_URL)
+                if (!response.ok) throw new Error('Failed to fetch tasks')
 
-            this.tasks = data;
-            this.isLoading = false
+                const data = await response.json()
+                this.tasks = data
+            } catch (err) {
+                this.error = err.message
+                console.error('Error fetching tasks:', err)
+            } finally {
+                this.isLoading = false
+            }
         },
         async addTask(task) {
-            task.id = String(task.id);
-            this.tasks.push(task);
+            try {
+                const response = await fetch(API_BASE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...task, id: String(task.id) })
+                })
 
-            const  res = await fetch('http://localhost:3000/tasks', {
-                method: 'POST',
-                body: JSON.stringify(task),
-                headers: {'Content-Type': 'application/json'}
-            })
+                if (!response.ok) throw new Error('Failed to add task')
 
-            if (res.error) {
-                console.log(res.error)
+                const savedTask = await response.json()
+                this.tasks.push(savedTask)
+            } catch (err) {
+                this.error = err.message
+                console.error('Error adding task:', err)
             }
         },
         async deleteTask(id) {
-            this.tasks = this.tasks.filter(t => {
-                return t.id !== id;
-            })
+            try {
+                const response = await fetch(`${API_BASE_URL}/${id}`, {
+                    method: 'DELETE'
+                })
 
-            const  res = await fetch(`http://localhost:3000/tasks/${id}`, {
-                method: 'DELETE',
-            })
+                if (!response.ok) throw new Error('Failed to delete task')
 
-            if (res.error) {
-                console.log(res.error)
+                this.tasks = this.tasks.filter(t => t.id !== id)
+            } catch (err) {
+                this.error = err.message
+                console.error('Error deleting task:', err)
             }
         },
         async toggleFav(id) {
-            const task = this.tasks.find(t => t.id === id);
+            try {
+                const task = this.tasks.find(t => t.id === id)
+                if (!task) throw new Error('Task not found')
 
-            task.isFav = !task.isFav;
+                const updatedIsFav = !task.isFav
 
-            const  res = await fetch(`http://localhost:3000/tasks/${id}`, {
-                method: 'PATCH',
-                body: JSON.stringify({isFav: task.isFav}),
-                headers: {'Content-Type': 'application/json'}
-            })
+                const response = await fetch(`${API_BASE_URL}/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ isFav: updatedIsFav })
+                })
 
-            if (res.error) {
-                console.log(res.error)
+                if (!response.ok) throw new Error('Failed to update task')
+
+                task.isFav = updatedIsFav
+            } catch (err) {
+                this.error = err.message
+                console.error('Error updating task:', err)
             }
         },
     }

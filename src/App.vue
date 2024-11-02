@@ -1,68 +1,165 @@
 <template>
-  <main>
-    
-    <!--heading-->
+  <main class="container mx-auto px-4">
     <header>
       <img src="./assets/Pinialogo.svg" alt="Pinia logo">
       <h1>Pinia Tasks</h1>
     </header>
 
-
-    <!-- filter -->
     <nav class="filter">
-      <button @click="filter = 'all'">All tasks</button>
-      <button @click="filter = 'favs'">Favorites</button>
+      <button
+          v-for="option in filterOptions"
+          :key="option.value"
+          @click="currentFilter = option.value"
+          :class="{ active: currentFilter === option.value }"
+      >
+        {{ option.label }}
+      </button>
     </nav>
 
-    <!-- loading -->
-    <div class="loading" v-if="isLoading">Loading tasks...</div>
+    <ErrorMessage
+        v-if="taskStore.error"
+        :message="taskStore.error"
+        @dismiss="taskStore.error = null"
+    />
 
-    <!-- new task form -->
-    <div class="new-task-form">
-      <TaskForm />
-    </div>
+    <LoadingSpinner v-if="isLoading" />
 
-    <!-- task list -->
-    <div class="task-list" v-if="filter === 'all'">
-      <p>All tasks: ( {{ totalCount }} )</p>
-      <div v-for="task in tasks">
-        <TaskDetails :task="task" />
-      </div>
-    </div>
-    <div class="task-list" v-if="filter === 'favs'">
-      <p>Favorite tasks: ( {{ favCount }} )</p>
-      <div v-for="task in favs">
-        <TaskDetails :task="task" />
-      </div>
-    </div>
+    <TaskForm v-if="!isLoading" />
 
-    <div class="filter">
-      <button @click="taskStore.$reset()">Reset state</button>
+    <!-- Single task list container -->
+    <div class="task-list" v-if="!isLoading">
+      <p>{{ currentFilter === 'all' ? 'All' : 'Favorite' }} tasks: ({{ currentCount }})</p>
+      <TransitionGroup
+          name="task-list"
+          tag="div"
+          class="task-container"
+      >
+        <TaskDetails
+            v-for="task in filteredTasks"
+            :key="task.id"
+            :task="task"
+        />
+      </TransitionGroup>
+      <button
+          @click="confirmReset"
+          class="reset-button"
+      >
+        Reset state
+      </button>
     </div>
 
   </main>
 </template>
 
-<script>
+<script setup>
+import { ref, computed } from 'vue'
 import { useTaskStore } from './stores/TaskStore'
+import { storeToRefs } from 'pinia'
 import TaskDetails from '@/components/TaskDetails.vue'
-import TaskForm from "@/components/TaskForm.vue";
-import {ref} from "vue";
-import {storeToRefs} from "pinia";
+import TaskForm from '@/components/TaskForm.vue'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import ErrorMessage from '@/components/ErrorMessage.vue'
 
-export default {
-  components: {TaskForm, TaskDetails },
-  setup () {
-    const taskStore = useTaskStore()
+const taskStore = useTaskStore()
+const { tasks, isLoading, favs, totalCount, favCount } = storeToRefs(taskStore)
 
-    const { tasks, isLoading, favs, totalCount, favCount } = storeToRefs(taskStore)
+const selectedTasks = ref(new Set())
 
-    // fetch data
-    taskStore.getTasks()
 
-    const filter = ref('all')
+const currentFilter = ref('all')
+const filterOptions = [
+  { value: 'all', label: 'All tasks' },
+  { value: 'favs', label: 'Favorites' }
+]
 
-    return { taskStore, filter, tasks, isLoading, favs, totalCount, favCount}
+// const filteredTasks = computed(() =>
+//     currentFilter.value === 'all' ? taskStore.sortedTasks : favs.value
+// )
+
+const filteredTasks = computed(() =>
+    taskStore.sortedTasks.filter(task => currentFilter.value === 'all' || task.isFav)
+)
+
+const currentCount = computed(() =>
+    currentFilter.value === 'all' ? totalCount.value : favCount.value
+)
+
+const confirmReset = () => {
+  if (confirm('Are you sure you want to reset all tasks?')) {
+    for (const task of tasks.value) {
+      taskStore.deleteTask(task.id)
+    }
+    taskStore.$reset()
   }
 }
+
+// Fetch tasks when component is mounted
+taskStore.getTasks()
 </script>
+
+<style scoped>
+.task-container {
+  position: relative;
+  padding: 0;
+}
+
+.task-list-move,
+.task-list-enter-active,
+.task-list-leave-active {
+  transition: all 0.5s ease;
+}
+
+.task-list-enter-from {
+  opacity: 0;
+  transform: translateX(-30px);
+}
+
+.task-list-leave-to {
+  opacity: 0;
+  transform: translateX(30px);
+}
+
+.task-list-leave-active {
+  position: absolute;
+  width: 100%;
+}
+
+.reset-button {
+  background-color: #ff4757;
+  color: black;
+  border: 2px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 15px 0;
+  padding: 4px 8px;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.active {
+  background-color: #ffcc00;
+  font-weight: bold;
+}
+
+.filter {
+  width: 640px;
+  margin: 20px auto;
+  text-align: center;
+}
+
+.filter button {
+  display: inline-block;
+  margin: 0 5px;
+  padding: 4px 8px;
+  font-size: 0.8em;
+  background: #ffd654;
+  border: 2px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: 0.2s ease-in-out;
+}
+
+.filter button:hover {
+  background-color: #ffcc00;
+}
+</style>
